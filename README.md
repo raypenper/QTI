@@ -1,6 +1,6 @@
 A high accurate ray tracing method using quadratic travetime interpolation
 *****************************************************************************
-Copyright (c) 2020, Deng fei. All rights reserved.
+Copyright (c) 2020, Deng fei, Fang peng. All rights reserved.
 ## License
 QTI is available under two different licenses:
 * GNU General Public License v3.0 (GPLv3)
