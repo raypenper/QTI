@@ -1,6 +1,6 @@
 High-accuracy ray tracing method using quadratic traveltime interpolation on triangular mesh
 *****************************************************************************
-Copyright (c) 2020, Deng Fei, Fang Peng. All rights reserved.
+Copyright (c) 2020, Deng Fei and Fang Peng. All rights reserved.
 ## License
 QTI is available under two different licenses:
 * GNU General Public License v3.0 (GPLv3)
