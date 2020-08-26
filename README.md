@@ -1,4 +1,4 @@
-A high accurate ray tracing method using quadratic travetime interpolation
+A high accurate ray tracing method using quadratic traveltime interpolation
 *****************************************************************************
 Copyright (c) 2020, Deng Fei, Fang Peng. All rights reserved.
 ## License
