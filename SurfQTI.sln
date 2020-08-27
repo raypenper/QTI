@@ -1,0 +1,37 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 11.00
+# Visual Studio 2010
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "解决方案项目", "解决方案项目", "{7088A4B6-57B1-43D5-8055-D765DF7428CC}"
+	ProjectSection(SolutionItems) = preProject
+		SurfLTI.vsd = SurfLTI.vsd
+	EndProjectSection
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "TestQTI", "TestQTI\TestQTI.vcxproj", "{8781A0C8-B487-48D1-87F2-7CF664CEDC09}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Win32 = Debug|Win32
+		Release|Win32 = Release|Win32
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{8781A0C8-B487-48D1-87F2-7CF664CEDC09}.Debug|Win32.ActiveCfg = Debug|Win32
+		{8781A0C8-B487-48D1-87F2-7CF664CEDC09}.Debug|Win32.Build.0 = Debug|Win32
+		{8781A0C8-B487-48D1-87F2-7CF664CEDC09}.Release|Win32.ActiveCfg = Release|Win32
+		{8781A0C8-B487-48D1-87F2-7CF664CEDC09}.Release|Win32.Build.0 = Release|Win32
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		QtVersion = Qt486
+	EndGlobalSection
+	GlobalSection(Qt) = preSolution
+		Integration = True
+	EndGlobalSection
+	GlobalSection(Qt) = preSolution
+		Integration = True
+	EndGlobalSection
+	GlobalSection(Qt) = preSolution
+		Integration = True
+	EndGlobalSection
+EndGlobal
