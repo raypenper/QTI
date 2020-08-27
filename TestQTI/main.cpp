@@ -109,17 +109,7 @@ int main(int argc, char *argv[])
 	mpModel->fillSlowness(0.001);
 
 	//perform QTI method
-	triLTI.forward2(spts[0], rpts, fbts, rays);
-	QString fname = "fbts.txt";
-	QFile file2(fname);
-	if (file2.open(QFile::WriteOnly))
-	{
-		QTextStream stream(&file2);
-		for (int i = 0; i < fbts.count(); i++)
-		{
-			stream << fbts[i] << endl;
-		}
-	}
+	triLTI.forwardQTI(spts[0], rpts, fbts, rays);
 	const QString outFilepath = argv[3];
 	QDir dir;
 	if(!dir.exists(outFilepath))
