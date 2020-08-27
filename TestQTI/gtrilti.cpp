@@ -3,15 +3,11 @@
 #include "gtrilti.h"
 #include "gtrimodel.h"
 #include "gmath.h"
-#include "gdistance.h"
 #include "gequroot.h"
-
-namespace Tomo
-{
 
 double GTriLTI::MAX_TIME = std::numeric_limits<double>::max();
 
-#define LTI_ZERO	1e-12
+#define LTI_ZERO	1e-16
 
 GTriLTI::GTriLTI( GTriModel *pModel/*=NULL*/ )
 {
@@ -40,10 +36,10 @@ const QVector<double> GTriLTI::getTrvalTimes() const
 
 struct LTITriEdge
 {
-	GTriModel * mpModel;			// 模型指针
-	double *	mModelTrvalTimes;	// 三角网顶点旅行时表
-	int			mTriIndex;			// 三角形下标
-	int			mEdgeIndex;			// 三角形中的边下标(0, 1, 2)
+	GTriModel * mpModel;			// the pointer to the model
+	double *	mModelTrvalTimes;	// traveltime of vertice in TIN
+	int			mTriIndex;			// index of triangle
+	int			mEdgeIndex;			// index of edge in triangle(0, 1, 2)
 
 	LTITriEdge(int it=0, int ie=0, GTriModel *pModel=0, double *ts=0)
 	{
@@ -96,8 +92,8 @@ inline void plotTrvalTime(double ta, double tb, double ab, double bc, double ac,
 }
 
 inline void plotTrvalTime2(double ta, double tb, double tm, double ab, double bc, double ac, 
-	double sinphi, double cosphi, double slowness, 
-	double &tc, double &r)
+						   double sinphi, double cosphi, double slowness, 
+						   double &tc, double &r)
 {
 	double k1, k2, k3;
 	k1 = 2*(ta - 2*tm + tb);
@@ -105,7 +101,7 @@ inline void plotTrvalTime2(double ta, double tb, double tm, double ab, double bc
 	k3 = ta;
 
 	plotTrvalTime(ta, tb, ab, bc, ac, sinphi, cosphi, slowness, tc, r);
-
+	
 	if (k1 <= 0) return ;
 
 	double a, b, c, d, e;
@@ -124,89 +120,27 @@ inline void plotTrvalTime2(double ta, double tb, double tm, double ab, double bc
 	p[4] = ab_2*ac_2*(k2_2 - s_2*ab_2*cosphi*cosphi);
 
 	double r0 = r;
-	//if (fabs(p[0]) > 1e-6)
+
+	int nr = solve_quartic_equation(p, x);
+	if (nr > 0)
 	{
-		int nr = solve_quartic_equation(p, x);
-		if (nr > 0)
+		for (int i=0; i<nr; i++)
 		{
-			for (int i=0; i<nr; i++)
+			double xi = x[i];
+			if (xi >= 0 && xi <= ab)
 			{
-				double xi = x[i];
-				if (xi >= 0 && xi <= ab)
+				double u = xi / ab;
+				double e = xi*xi + ac*ac - 2*xi*ac*cosphi;
+				if (e < 0) e = 0;
+				double t = k1*u*u + k2*u + k3 + slowness*sqrt(e);
+				if (t < tc && fabs(xi-r0) < 0.5*ab)
 				{
-					double u = xi / ab;
-					double e = xi*xi + ac*ac - 2*xi*ac*cosphi;
-					if (e < 0) e = 0;
-					double t = k1*u*u + k2*u + k3 + slowness*sqrt(e);
-					if (t < tc && fabs(xi-r0) < 0.5*ab)
-					{
-						tc = t;
-						r = xi;
-					}
+					tc = t;
+					r = xi;
 				}
 			}
-			//if (tc != GTriLTI::MAX_TIME) return ;
 		}
 	}
-}
-
-
-double GTriLTI::plotTimeAndPos2(const GPoint3d &pos, int itri, int ie, GPoint3d &nextPos, int ie0)
-{
-	int ip0, ip1;
-	if (ie0 < 0 || (ie0+1)%3 == ie)
-	{
-		ip0 = ie;		ip1 = (ie+1)%3;
-	}
-	else
-	{
-		ip1 = ie;		ip0 = (ie+1)%3;
-	}
-	const GTriangle &tri = mpModel->mTriangles[itri];
-	int ia = tri[ip0];
-	int ib = tri[ip1];
-	const GPoint3d &pa = mpModel->mPoints[ia];
-	const GPoint3d &pb = mpModel->mPoints[ib];
-	int ei = tri.mEdges[ie];
-	double tm = mMidTrvalTimes[ei];
-	//tm = (mTrvalTimes[ia] + mTrvalTimes[ib]) * 0.5;
-	double ab = tri.mEdgeLens[ie];
-	double bc = gDistance3D(pb, pos);
-	double ac = gDistance3D(pa, pos);
-
-	double cosPhi, sinPhi;
-	if (ie0 < 0)
-	{
-		double e = ab * ac;
-		if (e < LTI_ZERO)
-		{
-			cosPhi = 1;
-			sinPhi = 0;
-		}
-		else
-		{
-			cosPhi = (ab*ab+ac*ac-bc*bc)/(2*ab*ac);
-			if (cosPhi > 1) cosPhi = 1;
-			else if (cosPhi < -1) cosPhi = -1;
-			sinPhi = sqrt(1-cosPhi*cosPhi);
-		}
-	}
-	else
-	{
-		cosPhi = tri.mCosPhis[ip0];
-		sinPhi = tri.mSinPhis[ip0];
-	}
-
-	double tc, r;
-	plotTrvalTime2(mTrvalTimes[ia], mTrvalTimes[ib], tm,
-		ab, bc, ac,
-		sinPhi, cosPhi, tri.mSlowness, 
-		tc, r);
-
-	double s = r / ab;
-	nextPos.setXYZU(pa.x()+s*(pb.x()-pa.x()), pa.y()+s*(pb.y()-pa.y()),
-		pa.z()+s*(pb.z()-pa.z()),0);
-	return tc;
 }
 
 void GTriLTI::siftUp(int index)
@@ -257,154 +191,40 @@ void GTriLTI::siftDown(int index)
 	mLTIPointInfos[rp].mHeapIndex = i;
 }
 
-void GTriLTI::forward(const GPoint3d &spt)
+void GTriLTI::forward( const GPoint2d &spt, const QVector<GPoint2d> &rpts, QVector<double> &fbts, QList< QVector<GPoint2d> > &rays )
 {
-	mTrvalTimes.fill(MAX_TIME, mpModel->mPoints.count());
-	int sit = spt.getUsrInt();
-	if (sit < 0) return ;
-
-	int np = mpModel->mPoints.count();
-	// 用于LTI正演的顶点信息表
-	mLTIPointInfos = QVector<LTIPointInfo>(np);
-
-	// 边访问表
-	QVector<bool> edgeVisited(mpModel->mTriangles.count()*3, false);
-	// 清空最小堆
-	mLTIHeap.clear();
-
-	// 计算炮点所在三角形三个顶点的旅行时
-	const GTriangle &stri = mpModel->mTriangles[sit];
-	for (int i=0; i<3; i++)
-	{
-		const GVector3d &pos = mpModel->mPoints[stri[i]];
-		double dist = gDistance3D(pos, spt);
-		mTrvalTimes[stri[i]] = dist * stri.mSlowness;
-
-		if (stri.mAdjTris[i] >= 0)
-		{
-			mLTIHeap << stri[i];
-		}
-	}
-
-	// 确保堆顶元素时间最小
-	for (int i=1; i<mLTIHeap.count(); i++)
-	{
-		if (mTrvalTimes[mLTIHeap[i]] < mTrvalTimes[mLTIHeap[0]])
-		{
-			qSwap(mLTIHeap[0], mLTIHeap[i]);
-		}
-	}
-	for (int i=0; i<mLTIHeap.count(); i++)
-	{
-		mLTIPointInfos[mLTIHeap[i]].mHeapIndex = i;
-		mLTIPointInfos[mLTIHeap[i]].mIsFixed = true;
-	}
-
-	// 顶点引用表
-	QList< GPTRefList > &refLists = mpModel->mPTRefLists;
-
-	while (!mLTIHeap.isEmpty())
-	{
-		int pi = mLTIHeap[0];
-		mLTIPointInfos[pi].mIsFixed = true;
-
-		mLTIHeap[0] = mLTIHeap.last();
-		mLTIHeap.pop_back();
-		if (mLTIHeap.count() > 1) siftDown(0);
-
-		GPTRefList &refList = refLists[pi];
-		// 遍历顶点引用表
-		for (int i=0; i<refList.count(); i++)
-		{
-			int itri = refList[i].first;
-			const GTriangle &tri = mpModel->mTriangles[itri];
-			int ip = refList[i].second;
-
-			int ies[2];
-			ies[0] = ip;
-			ies[1] = (ip + 2) % 3;
-
-			for (int j=0; j<2; j++)
-			{
-				int ie = ies[j];
-				int ia = tri[ie];
-				int ib = tri[(ie+1)%3];
-				int ic = tri[(ie+2)%3];
-
-				if (mLTIPointInfos[ic].mIsFixed || 
-					!(mLTIPointInfos[ia].mIsFixed && mLTIPointInfos[ib].mIsFixed) ||
-					edgeVisited[itri*3 + ie]) continue ;
-
-				double tc, r;
-				plotTrvalTime(mTrvalTimes[ia], mTrvalTimes[ib],
-					tri.mEdgeLens[ie], tri.mEdgeLens[(ie+1)%3], tri.mEdgeLens[(ie+2)%3],
-					tri.mSinPhis[ie], tri.mCosPhis[ie], tri.mSlowness, 
-					tc, r);
-
-				edgeVisited[itri*3 + ie] = true;
-
-				if (tc < mTrvalTimes[ic])
-				{
-					mTrvalTimes[ic] = tc;
-					if (mLTIPointInfos[ic].mHeapIndex < 0)
-					{
-						mLTIHeap << ic;
-						siftUp(mLTIHeap.count() - 1);
-					}
-					else
-					{
-						siftUp(mLTIPointInfos[ic].mHeapIndex);
-					}
-				}
-			}
-		}
-	}
-}
-
-void GTriLTI::forward( const GPoint3d &spt, const QVector<GPoint3d> &rpts, QVector<double> &fbts, QList< QVector<GPoint3d> > &rays )
-{
-	//QTime time;
-	//time.start();
-
 	int nrpt = rpts.count();
 	fbts.fill(-1, nrpt);
 
 	rays.clear();
 	for (int i=0; i<nrpt; i++)
 	{
-		rays << QVector<GPoint3d>();
+		rays << QVector<GPoint2d>();
 	}
 
 	int sit = spt.getUsrInt();
 	if (sit < 0) return ;
 
-	
 	mTrvalTimes.fill(MAX_TIME, mpModel->mPoints.count());
 
 	int np = mpModel->mPoints.count();
-	// 用于LTI正演的顶点信息表
+	// info of vertice for forward using LTI
 	mLTIPointInfos = QVector<LTIPointInfo>(np);
 
-	// 边访问表
 	QVector<bool> edgeVisited(mpModel->mTriangles.count()*3, false);
-	// 清空最小堆
+
 	mLTIHeap.clear();
 
-	// 计算炮点所在三角形三个顶点的旅行时
 	const GTriangle &stri = mpModel->mTriangles[sit];
 	for (int i=0; i<3; i++)
 	{
-		const GVector3d &pos = mpModel->mPoints[stri[i]];
-		double dist = gDistance3D(pos, spt);
+		const GVector2d &pos = mpModel->mPoints[stri[i]];
+		double dist = gDistance2D(pos, spt);
 		mTrvalTimes[stri[i]] = dist * stri.mSlowness;
 
-		if (stri.mAdjTris[i] >= 0)
-		{
-			mLTIHeap << stri[i];
-		}
+		mLTIHeap << stri[i];
 	}
 
-	// 确保堆顶元素时间最小
 	for (int i=1; i<mLTIHeap.count(); i++)
 	{
 		if (mTrvalTimes[mLTIHeap[i]] < mTrvalTimes[mLTIHeap[0]])
@@ -418,7 +238,6 @@ void GTriLTI::forward( const GPoint3d &spt, const QVector<GPoint3d> &rpts, QVect
 		mLTIPointInfos[mLTIHeap[i]].mIsFixed = true;
 	}
 
-	// 顶点引用表
 	QList< GPTRefList > &refLists = mpModel->mPTRefLists;
 
 	while (!mLTIHeap.isEmpty())
@@ -431,7 +250,7 @@ void GTriLTI::forward( const GPoint3d &spt, const QVector<GPoint3d> &rpts, QVect
 		if (mLTIHeap.count() > 1) siftDown(0);
 
 		GPTRefList &refList = refLists[pi];
-		// 遍历顶点引用表
+
 		for (int i=0; i<refList.count(); i++)
 		{
 			int itri = refList[i].first;
@@ -476,71 +295,51 @@ void GTriLTI::forward( const GPoint3d &spt, const QVector<GPoint3d> &rpts, QVect
 				}
 			}
 		}
-
-		//printf("Len = %d\n", mLTIHeap.count());
 	}
 
-	//for (int i=0; i<1; i++)
 	for (int i=0; i<rpts.count(); i++)
 	{
 		fbts[i] = traceRayPath(spt, rpts[i], rays[i]);
 	}
-
-	//printf("end %d\n", time.elapsed());
 }
 
-void GTriLTI::forward2(const GPoint3d &spt, const QVector<GPoint3d> &rpts, QVector<double> &fbts, QList< QVector<GPoint3d> > &rays)
+void GTriLTI::forwardQTI(const GPoint2d &spt, const QVector<GPoint2d> &rpts, QVector<double> &fbts, QList< QVector<GPoint2d> > &rays)
 {
-	//QTime time;
-	//time.start();
-
 	int nrpt = rpts.count();
 	fbts.fill(-1, nrpt);
 
 	rays.clear();
 	for (int i=0; i<nrpt; i++)
 	{
-		rays << QVector<GPoint3d>();
+		rays << QVector<GPoint2d>();
 	}
 
 	int sit = spt.getUsrInt();
 	if (sit < 0) return ;
 
-
 	mTrvalTimes.fill(MAX_TIME, mpModel->mPoints.count());
 	mMidTrvalTimes.fill(MAX_TIME, mpModel->mEdges.count());
-
 	int np = mpModel->mPoints.count();
-	// 用于LTI正演的顶点信息表
 	mLTIPointInfos = QVector<LTIPointInfo>(np);
-
-	// 边访问表
 	QVector<bool> edgeVisited(mpModel->mTriangles.count()*3, false);
-	// 清空最小堆
 	mLTIHeap.clear();
-
-	// 计算炮点所在三角形三个顶点的旅行时
 	const GTriangle &stri = mpModel->mTriangles[sit];
 
 	for (int i=0; i<3; i++)
 	{
-		const GVector3d &pos = mpModel->mPoints[stri[i]];
-		double dist = gDistance3D(pos, spt);
+		const GVector2d &pos = mpModel->mPoints[stri[i]];
+		double dist = gDistance2D(pos, spt);
 		mTrvalTimes[stri[i]] = dist * stri.mSlowness;
 
-		//if (stri.mAdjTris[i] >= 0)
-		{
-			mLTIHeap << stri[i];
-		}
+		mLTIHeap << stri[i];
 
-		// 计算边中点旅行时
+		// calculate the traveltime of the mid point of the edge
 		int ei = stri.mEdges[i];
-		GVector3d midPos = (mpModel->mPoints[stri[i]] + mpModel->mPoints[stri[(i+1)%3]]) * 0.5;
-		dist = gDistance3D(midPos, spt);
+		GVector2d midPos = (mpModel->mPoints[stri[i]] + mpModel->mPoints[stri[(i+1)%3]]) * 0.5;
+		dist = gDistance2D(midPos, spt);
 		mMidTrvalTimes[ei] = dist * stri.mSlowness;
 	}
 
-	// 确保堆顶元素时间最小
 	for (int i=1; i<mLTIHeap.count(); i++)
 	{
 		if (mTrvalTimes[mLTIHeap[i]] < mTrvalTimes[mLTIHeap[0]])
@@ -554,7 +353,6 @@ void GTriLTI::forward2(const GPoint3d &spt, const QVector<GPoint3d> &rpts, QVect
 		mLTIPointInfos[mLTIHeap[i]].mIsFixed = true;
 	}
 
-	// 顶点引用表
 	QList< GPTRefList > &refLists = mpModel->mPTRefLists;
 
 	while (!mLTIHeap.isEmpty())
@@ -567,7 +365,7 @@ void GTriLTI::forward2(const GPoint3d &spt, const QVector<GPoint3d> &rpts, QVect
 		if (mLTIHeap.count() > 1) siftDown(0);
 
 		GPTRefList &refList = refLists[pi];
-		// 遍历顶点引用表
+
 		for (int i=0; i<refList.count(); i++)
 		{
 			int itri = refList[i].first;
@@ -592,40 +390,36 @@ void GTriLTI::forward2(const GPoint3d &spt, const QVector<GPoint3d> &rpts, QVect
 
 				double tm, tc, r;
 				tm = mMidTrvalTimes[ei];
-				//tm = 0.5 * (mTrvalTimes[ia] + mTrvalTimes[ib]);
-
 				plotTrvalTime2(mTrvalTimes[ia], mTrvalTimes[ib], tm,
 					tri.mEdgeLens[ie], tri.mEdgeLens[(ie+1)%3], tri.mEdgeLens[(ie+2)%3],
 					tri.mSinPhis[ie], tri.mCosPhis[ie], tri.mSlowness, 
 					tc, r);
-				double tcc = gDistance3D(mpModel->mPoints[ic], spt) * tri.mSlowness;
+				double tcc = gDistance2D(mpModel->mPoints[ic], spt) * tri.mSlowness;
 
-				// 插值两边中点的时间
+				// derive the traveltime of the mid point
 				double tc1, tc2, r1, r2, bc, ac;
-				GVector3d midPos;
+				GVector2d midPos;
 				midPos = (mpModel->mPoints[ia] + mpModel->mPoints[ic])*0.5;
-				bc = gDistance3D(mpModel->mPoints[ib], midPos);
-				ac = gDistance3D(mpModel->mPoints[ia], midPos);
+				bc = gDistance2D(mpModel->mPoints[ib], midPos);
+				ac = gDistance2D(mpModel->mPoints[ia], midPos);
 				plotTrvalTime2(mTrvalTimes[ia], mTrvalTimes[ib], tm,
 					tri.mEdgeLens[ie], bc, ac,
 					tri.mSinPhis[ie], tri.mCosPhis[ie], tri.mSlowness, 
 					tc1, r1);
-				//double tcm1 = 0.5 * (mTrvalTimes[ia] + mTrvalTimes[ib]);
-				//if (tc1 > tcm1) tc1 = tcm1;
+
 				if (mMidTrvalTimes[tri.mEdges[(ie+2)%3]] > tc1)
 				{
 					mMidTrvalTimes[tri.mEdges[(ie+2)%3]] = tc1;
 				}
 
 				midPos = (mpModel->mPoints[ib] + mpModel->mPoints[ic]) * 0.5;
-				bc = gDistance3D(midPos, mpModel->mPoints[ia]);
-				ac = gDistance3D(midPos, mpModel->mPoints[ib]);
+				bc = gDistance2D(mpModel->mPoints[ia], midPos);
+				ac = gDistance2D(mpModel->mPoints[ib], midPos);
 				plotTrvalTime2(mTrvalTimes[ib], mTrvalTimes[ia], tm,
 					tri.mEdgeLens[ie], bc, ac,
 					tri.mSinPhis[(ie+1)%3], tri.mCosPhis[(ie+1)%3], tri.mSlowness, 
 					tc2, r2);
-				//double tcm2 = 0.5 * (mTrvalTimes[ib] + mTrvalTimes[ia]);
-				//if (tc2 > tcm2) tc2 = tcm2;
+
 				if (mMidTrvalTimes[tri.mEdges[(ie+1)%3]] > tc2)
 				{
 					mMidTrvalTimes[tri.mEdges[(ie+1)%3]] = tc2;
@@ -648,47 +442,30 @@ void GTriLTI::forward2(const GPoint3d &spt, const QVector<GPoint3d> &rpts, QVect
 				}
 			}
 		}
-
-		//printf("Len = %d\n", mLTIHeap.count());
 	}
-
-	FILE *fp = fopen("eps.txt", "w");
-	fprintf(fp, "X\tY\tT\n");
-	for (int i=0; i<mpModel->mPoints.count(); i++)
-	{
-		const GVector3d &pos = mpModel->mPoints[i];
-		double err = fabs(mTrvalTimes[i] - gDistance3D(pos, spt));
-		fprintf(fp, "%.4f\t%.4f\t%.8f\n", pos.x(), pos.y(), mTrvalTimes[i]);
-		//mTrvalTimes[i] = gDistance2D(pos, spt);
-	}
-	fclose(fp);
 
 	for (int i=0; i<mpModel->mEdges.count(); i++)
 	{
 		const GTriEdge &edge = mpModel->mEdges[i];
-		GVector3d pos = (mpModel->mPoints[edge[0]] + mpModel->mPoints[edge[1]]) * 0.5;
-		//mMidTrvalTimes[i] = gDistance2D(pos, spt);
+		GVector2d pos = (mpModel->mPoints[edge[0]] + mpModel->mPoints[edge[1]]) * 0.5;
 	}
 
-	//for (int i=0; i<rpts.count(); i++)
-	//for (int i=66; i<67; i++)
 	for (int i=0; i<rpts.count(); i++)
 	{
 		fbts[i] = traceRayPath2(spt, rpts[i], rays[i]);
 	}
-	//printf("end %d\n", time.elapsed());
 }
 
-double GTriLTI::plotTimeAndPos(const GPoint3d &pos, int itri, int ie, GPoint3d &nextPos)
+double GTriLTI::plotTimeAndPos(const GPoint2d &pos, int itri, int ie, GPoint2d &nextPos)
 {
 	const GTriangle &tri = mpModel->mTriangles[itri];
 	int ia = tri[ie];
 	int ib = tri[(ie+1)%3];
-	const GPoint3d &pa = mpModel->mPoints[ia];
-	const GPoint3d &pb = mpModel->mPoints[ib];
+	const GPoint2d &pa = mpModel->mPoints[ia];
+	const GPoint2d &pb = mpModel->mPoints[ib];
 	double ab = tri.mEdgeLens[ie];
-	double bc = gDistance3D(pb, pos);
-	double ac = gDistance3D(pa, pos);
+	double bc = gDistance2D(pb, pos);
+	double ac = gDistance2D(pa, pos);
 
 	double cosPhi, sinPhi;
 	double e = ab * ac;
@@ -710,18 +487,73 @@ double GTriLTI::plotTimeAndPos(const GPoint3d &pos, int itri, int ie, GPoint3d &
 				  tc, r);
 
 	double s = r / ab;
-	nextPos = pa + (pb - pa) * s;
+	nextPos.set(pa.x()+s*(pb.x()-pa.x()), pa.y()+s*(pb.y()-pa.y()));
 	return tc;
 }
 
-void GTriLTI::getNextPlotEdges(const GPoint3d &nextPos, int itri, int iedge, QList< QPair<int, int> > &nextPlotEdges)
+double GTriLTI::plotTimeAndPos2(const GPoint2d &pos, int itri, int ie, GPoint2d &nextPos, int ie0)
+{
+	int ip0, ip1;
+	if (ie0 < 0 || (ie0+1)%3 == ie)
+	{
+		ip0 = ie;		ip1 = (ie+1)%3;
+	}
+	else
+	{
+		ip1 = ie;		ip0 = (ie+1)%3;
+	}
+	const GTriangle &tri = mpModel->mTriangles[itri];
+	int ia = tri[ip0];
+	int ib = tri[ip1];
+	const GPoint2d &pa = mpModel->mPoints[ia];
+	const GPoint2d &pb = mpModel->mPoints[ib];
+	int ei = tri.mEdges[ie];
+	double tm = mMidTrvalTimes[ei];
+	double ab = tri.mEdgeLens[ie];
+	double bc = gDistance2D(pb, pos);
+	double ac = gDistance2D(pa, pos);
+	double cosPhi, sinPhi;
+	if (ie0 < 0)
+	{
+		double e = ab * ac;
+		if (e < LTI_ZERO)
+		{
+			cosPhi = 1;
+			sinPhi = 0;
+		}
+		else
+		{
+			cosPhi = (ab*ab+ac*ac-bc*bc)/(2*ab*ac);
+			if (cosPhi > 1) cosPhi = 1;
+			else if (cosPhi < -1) cosPhi = -1;
+			sinPhi = sqrt(1-cosPhi*cosPhi);
+		}
+	}
+	else
+	{
+		cosPhi = tri.mCosPhis[ip0];
+		sinPhi = tri.mSinPhis[ip0];
+	}
+
+	double tc, r;
+	plotTrvalTime2(mTrvalTimes[ia], mTrvalTimes[ib], tm,
+		ab, bc, ac,
+		sinPhi, cosPhi, tri.mSlowness, 
+		tc, r);
+
+	double s = r / ab;
+	nextPos.set(pa.x()+s*(pb.x()-pa.x()), pa.y()+s*(pb.y()-pa.y()));
+	return tc;
+}
+
+void GTriLTI::getNextPlotEdges(const GPoint2d &nextPos, int itri, int iedge, QList< QPair<int, int> > &nextPlotEdges)
 {
 	static double eps = 1e-6;
 	const GTriangle &tri = mpModel->mTriangles[itri];
 	int ip = -1;
 	for (int i=0; i<3; i++)
 	{
-		double d = gDistance3D(nextPos, mpModel->mPoints[tri[i]]);
+		double d = gDistance2D(nextPos, mpModel->mPoints[tri[i]]);
 		if (d < eps)
 		{
 			ip = i;
@@ -729,7 +561,7 @@ void GTriLTI::getNextPlotEdges(const GPoint3d &nextPos, int itri, int iedge, QLi
 		}
 	}
 
-	// 在顶点上
+	// on the vertex
 	if (ip >= 0)
 	{
 		GPTRefList &refList = mpModel->mPTRefLists[tri[ip]];
@@ -737,29 +569,29 @@ void GTriLTI::getNextPlotEdges(const GPoint3d &nextPos, int itri, int iedge, QLi
 		{
 			int it = refList[i].first;
 			ip = refList[i].second;
-			// 跳过入射三角形
+			// Skip incident triangle
 			if (it == itri && iedge >= 0) continue;
 
 			nextPlotEdges << QPair<int, int>(it, (ip+1)%3);
 		}
 	}
-	else if (iedge >= 0)	// 在边界上
+	else if (iedge >= 0)	// on the edge
 	{
 		int it = tri.mAdjTris[iedge];
 		if (it >= 0)
 		{
 			int ie = tri.mAdjEdges[iedge];
 			nextPlotEdges << QPair<int, int>(it, (ie+1)%3) <<
-				QPair<int, int>(it, (ie+2)%3);
+							QPair<int, int>(it, (ie+2)%3);
 		}
 	}
-	else	// 在三角形内部
+	else	// Inside the triangle
 	{
 		nextPlotEdges << QPair<int, int>(itri, 0) << QPair<int, int>(itri, 1) << QPair<int, int>(itri, 2);
 	}
 }
 
-double GTriLTI::traceRayPath(const GPoint3d &spt, const GPoint3d &rpt, QVector<GPoint3d> &ray)
+double GTriLTI::traceRayPath(const GPoint2d &spt, const GPoint2d &rpt, QVector<GPoint2d> &ray)
 {
 	int sit, itri, iedge;
 	double fbt = -1;
@@ -773,14 +605,12 @@ double GTriLTI::traceRayPath(const GPoint3d &spt, const GPoint3d &rpt, QVector<G
 	ray << rpt;
 	QList< QPair<int, int> > nextPlotEdges;
 	getNextPlotEdges(rpt, itri, -1, nextPlotEdges);
-	//nextPlotEdges << QPair<int, int>(itri, 0) << QPair<int, int>(itri, 1) << QPair<int, int>(itri, 2);
-
 	fbt = -1;
 	while (!nextPlotEdges.isEmpty())
 	{
-		// 插值下一个射线位置
+		// interpolate the next ray position
 		double minTime = MAX_TIME;
-		GPoint3d nextPos, pos;
+		GPoint2d nextPos, pos;
 		itri = iedge = -1;
 		for (int i=0; i<nextPlotEdges.count(); i++)
 		{
@@ -788,19 +618,16 @@ double GTriLTI::traceRayPath(const GPoint3d &spt, const GPoint3d &rpt, QVector<G
 			int ie = nextPlotEdges[i].second;
 			const GTriangle &tri = mpModel->mTriangles[it];
 			if (it != sit && tri.mAdjTris[ie] < 0) continue ;
-			 
-			// 到达炮点所在三角形, 停止追踪
+
+			// stop tracing when arrive at the triangle containing source point
 			if (it == sit)
 			{
-				ray.append(spt);
-				// 如果检波点和炮点在同一个三角形中, 特殊处理
-				if (fbt < 0) fbt = gDistance3D(rpt, spt) * tri.mSlowness;
-				//fbt += gDistance3D(ray[0], spt) * tri.mSlowness;
+				ray.prepend(spt);
+				if (fbt < 0) fbt = gDistance2D(rpt, spt) * tri.mSlowness;
 				return fbt;
 			}
-
-			// 插值时间和位置
-			double tc = plotTimeAndPos(ray.last(), it, ie, pos);
+			// interpolate traveltime and position
+			double tc = plotTimeAndPos(ray[0], it, ie, pos);
 			if (tc < minTime && it >= 0)
 			{
 				minTime = tc;
@@ -809,27 +636,21 @@ double GTriLTI::traceRayPath(const GPoint3d &spt, const GPoint3d &rpt, QVector<G
 				nextPos = pos;
 			}
 		}
-
-		// 记录检波点初至时间
+		// log first arrival of receiving points
 		if (fbt < 0) fbt = minTime;
 		if (itri < 0) break ;
-		// 插入当前位置
+		// insert current position
 		nextPos.setUsrInt(itri);
-		// 累计检波点时间
-		//fbt += gDistance3D(nextPos, ray[0]) * mpModel->mTriangles[itri].mSlowness;
-		ray.append(nextPos);
-		
-
-		// 寻找下一次的插值边
+		ray.prepend(nextPos);
+		// search next edge for interpolation
 		nextPlotEdges.clear();
 		getNextPlotEdges(nextPos, itri, iedge, nextPlotEdges);
 	}
-	
 	ray.clear();
 	return -1;
 }
 
-double GTriLTI::traceRayPath2(const GPoint3d &spt, const GPoint3d &rpt, QVector<GPoint3d> &ray)
+double GTriLTI::traceRayPath2(const GPoint2d &spt, const GPoint2d &rpt, QVector<GPoint2d> &ray)
 {
 	int sit, itri, iedge;
 	double fbt = -1;
@@ -843,15 +664,12 @@ double GTriLTI::traceRayPath2(const GPoint3d &spt, const GPoint3d &rpt, QVector<
 	ray << rpt;
 	QList< QPair<int, int> > nextPlotEdges;
 	getNextPlotEdges(rpt, itri, -1, nextPlotEdges);
-	//nextPlotEdges << QPair<int, int>(itri, 0) << QPair<int, int>(itri, 1) << QPair<int, int>(itri, 2);
 	int iedge0 = -1;
-
-	fbt = -1;
+	fbt = 0;
 	while (!nextPlotEdges.isEmpty())
 	{
-		// 插值下一个射线位置
 		double minTime = MAX_TIME;
-		GPoint3d nextPos, pos;
+		GPoint2d nextPos, pos;
 		itri = iedge = -1;
 		for (int i=0; i<nextPlotEdges.count(); i++)
 		{
@@ -860,17 +678,13 @@ double GTriLTI::traceRayPath2(const GPoint3d &spt, const GPoint3d &rpt, QVector<
 			const GTriangle &tri = mpModel->mTriangles[it];
 			if (it != sit && tri.mAdjTris[ie] < 0) continue ;
 
-			// 到达炮点所在三角形, 停止追踪
 			if (it == sit)
 			{
 				ray.prepend(spt);
-				// 如果检波点和炮点在同一个三角形中, 特殊处理
-				if (fbt < 0) fbt = gDistance3D(rpt, spt) * tri.mSlowness;
-				//fbt += gDistance2D(ray[0], spt) * tri.mSlowness;
+				fbt += gDistance2D(ray[0], spt) * tri.mSlowness;
 				return fbt;
 			}
 
-			// 插值时间和位置
 			double tc = plotTimeAndPos2(ray[0], it, ie, pos, iedge0);
 			if (tc < minTime && it >= 0)
 			{
@@ -880,26 +694,16 @@ double GTriLTI::traceRayPath2(const GPoint3d &spt, const GPoint3d &rpt, QVector<
 				nextPos = pos;
 			}
 		}
-
-		// 记录检波点初至时间
-		if (fbt < 0) fbt = minTime;
 		if (itri < 0) break ;
-		// 插入当前位置
 		nextPos.setUsrInt(itri);
-		// 累计检波点时间
-		//fbt += gDistance2D(nextPos, ray[0]) * mpModel->mTriangles[itri].mSlowness;
+		fbt += gDistance2D(nextPos, ray[0]) * mpModel->mTriangles[itri].mSlowness;
 		ray.prepend(nextPos);
 
-
-		// 寻找下一次的插值边
 		nextPlotEdges.clear();
 		getNextPlotEdges(nextPos, itri, iedge, nextPlotEdges);
 		const GTriangle &tri0 = mpModel->mTriangles[itri];
 		if (iedge >= 0) iedge0 = tri0.mAdjEdges[iedge];
 	}
-
 	ray.clear();
 	return -1;
-}
-
 }

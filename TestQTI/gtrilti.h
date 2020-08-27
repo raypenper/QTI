@@ -1,25 +1,29 @@
+/**************************************************
+Copyright (c) 2020, Deng fei & Fang Peng. All rights reserved.
+QTI is available under two different licenses:
+GNU General Public License v3.0 (GPLv3)
+Commercial license (please contact at Deng Fei(at)dengfei@cdut.cn)
+/*************************************************/
 #ifndef GTRI_LTI_H
 #define GTRI_LTI_H
 
 #include <QVector>
 #include <QList>
 #include <QPair>
-#include "gpoint3d.h"
+#include "gpoint2d.h"
 
-namespace Tomo
-{
+class GTriModel; 
 
-class GTriModel;
-
-// 基于三角网的线性旅行时插值正演类
-class GTriLTI
+// forward modeling using traveltime interpolation 
+// based on Triangulation Network
+class GTriLTI 
 {
 protected:
-	// 用于LTI的顶点额外信息结构
+	// extra vertex information structure for LTI
 	struct LTIPointInfo
 	{
-		int		mHeapIndex;		// 顶点在堆中的下标
-		bool	mIsFixed;		// 是否做过子震源
+		int		mHeapIndex;		// vertex index in heap
+		bool	mIsFixed;		// if the vertex was a subseismic source
 
 		LTIPointInfo(int index=-1, bool isFixed=false)
 		{
@@ -29,68 +33,54 @@ protected:
 	};
 
 protected:
-	static double		MAX_TIME;		// 最大旅行时
-	QVector<double>		mTrvalTimes;	// 三角网顶点的旅行时表
-	GTriModel *			mpModel;		// 三角网格模型
-	QVector<LTIPointInfo> mLTIPointInfos;	// LTI插值顶点信息表
-	QVector<int>		mLTIHeap;		// LTI插值计算时的最小时间堆(存储顶点下标)
+	QVector<double>		mTrvalTimes;	// traveltime table
+	QVector<double>		mMidTrvalTimes;	// midpoint traveltime table for QTI
+	GTriModel *			mpModel;		// triangular mesh model
+	QVector<LTIPointInfo> mLTIPointInfos;	// vertex information for LTI
+	QVector<int>		mLTIHeap;		// traveltime heap for LTI(vertex index )
 
-	QVector<double>		mMidTrvalTimes;	// 边中点的旅行时表
+public:
+	static double		MAX_TIME;		// maximum traveltime
 
 protected:
 
-	// 向下调整LTI堆
+	// downward adjustments in heap
 	void siftDown(int index);
 
-	// 向上调整LTI堆
-	void siftUp(int index); 
+	// upward adjustments in heap
+	void siftUp(int index);
 
-	// 用线性插值估计射线最小旅行时和位置
-	double plotTimeAndPos(const GPoint3d &pos, int itri, int ie, GPoint3d &nextPos);
+	// evaluate the minimum traveltime and the corresponding coordinate on the edge using LTI method
+	double plotTimeAndPos(const GPoint2d &pos, int itri, int ie, GPoint2d &nextPos);
+	// evaluate the minimum traveltime and the corresponding coordinate on the edge using QTI method
+	double plotTimeAndPos2(const GPoint2d &pos, int itri, int ie, GPoint2d &nextPos, int ie0=-1);
 
-	// 二次插值
-	double plotTimeAndPos2(const GPoint3d &pos, int itri, int ie, GPoint3d &nextPos, int ie0=-1);
+	// derive the next available edge for interpolation
+	void getNextPlotEdges(const GPoint2d &nextPos, int itri, int iedge, QList< QPair<int, int> > &nextPlotEdges);
 
-	// 得到下一步可用于插值的边
-	void getNextPlotEdges(const GPoint3d &nextPos, int itri, int iedge, QList< QPair<int, int> > &nextPlotEdges);
-
-	// 从检波点开始追踪射线路径, 并且返回检波点旅行时
-	double traceRayPath(const GPoint3d &spt, const GPoint3d &rpt, QVector<GPoint3d> &ray);
-
-	double traceRayPath2(const GPoint3d &spt, const GPoint3d &rpt, QVector<GPoint3d> &ray);
-
-
-	// 固定pt1和pt2, 扰动pt点, 优化射线路径
-	void blend(int itri1, int itri2, int &ie2, const GPoint3d &pt1, const GPoint3d &pt2, GPoint3d &pt);
-
-	// 逐段迭代优化射线路径
-	// traceEdges:	记录了射线轨迹中顶点所在三角形的边(首尾2个顶点的边无意义)
-	// ray:			射线轨迹, 顶点的userInt字段记录了顶点所在三角形
-	void blendRay(QVector<int> &traceEdges, QVector<GPoint3d> &ray, int ip0, int ip1);
+	// ray tracing from source point, and return traveltime of receiving points(using LTI method)
+	double traceRayPath(const GPoint2d &spt, const GPoint2d &rpt, QVector<GPoint2d> &ray);
+	// ray tracing from source point, and return traveltime of receiving points(using QTI method)
+	double traceRayPath2(const GPoint2d &spt, const GPoint2d &rpt, QVector<GPoint2d> &ray);
 
 public:
 	GTriLTI(GTriModel *pModel=NULL);
 	~GTriLTI();
 
 	void setModel(GTriModel *pModel);
-
+	
 	GTriModel * getModel();
 
-	// 正演初至和射线轨迹
-	void forward(const GPoint3d &spt, const QVector<GPoint3d> &rpts,
-				 QVector<double> &fbts, QList< QVector<GPoint3d> > &rays);
+	// Forward modeling of first arrivals and ray trajectories using LTI method
+	void forward(const GPoint2d &spt, const QVector<GPoint2d> &rpts,
+				 QVector<double> &fbts, QList< QVector<GPoint2d> > &rays);
 
-	// 二次插值正演初至和射线轨迹
-	void forward2(const GPoint3d &spt, const QVector<GPoint3d> &rpts,
-		QVector<double> &fbts, QList< QVector<GPoint3d> > &rays);
+	// Forward modeling of first arrivals and ray trajectories using QTI method
+	void forwardQTI(const GPoint2d &spt, const QVector<GPoint2d> &rpts,
+				  QVector<double> &fbts, QList< QVector<GPoint2d> > &rays);
 
-	// 仅计算旅行时表格
-	void forward(const GPoint3d &spt);
-
-	// 返回顶点旅行时表格
+	// return the traveltime of all vertices
 	const QVector<double> getTrvalTimes() const;
 };
-
-}
 
 #endif
