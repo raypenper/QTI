@@ -7,4 +7,4 @@ QTI is available under two different licenses:
 * Commercial license (please contact at Deng fei(at)dengfei@cdut.cn)
 *****************************************************************************
 ## Compile
-All our source code were written in C++, using Microsoft Visual Studio 2010.
+All our source code were written in C++, using Microsoft Visual Studio 2010 with QT4.8.6 as its external library.
