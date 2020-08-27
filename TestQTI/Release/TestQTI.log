@@ -1,0 +1,25 @@
+﻿生成启动时间为 2020/8/27 15:07:02。
+     1>项目“G:\Projects\SurfLTI\TestQTI\TestQTI.vcxproj”在节点 2 上(rebuild 个目标)。
+     1>_PrepareForClean:
+         正在删除文件“Release\TestQTI.lastbuildstate”。
+       InitializeBuildStatus:
+         正在创建“Release\TestQTI.unsuccessfulbuild”，因为已指定“AlwaysCreate”。
+       ClCompile:
+         F:\VS10\VC\bin\CL.exe /c /I..\Core /I. /ID:\Qt\Qt486\include /I.\GeneratedFiles\Release /ID:\Qt\Qt486\include\QtCore /nologo /W1 /WX- /O2 /Oy- /D UNICODE /D WIN32 /D QT_DLL /D QT_NO_DEBUG /D NDEBUG /D QT_CORE_LIB /Gm- /EHsc /MD /GS /fp:precise /Zc:wchar_t- /Zc:forScope /Fo"Release\\" /Fd"Release\vc100.pdb" /Gd /TP /analyze- /errorReport:prompt gtrilti.cpp main.cpp
+         gtrilti.cpp
+         main.cpp
+         正在生成代码...
+       Link:
+         F:\VS10\VC\bin\link.exe /ERRORREPORT:PROMPT /OUT:"..\bin\Release\\TestQTI.exe" /NOLOGO /LIBPATH:..\bin\Release\ /LIBPATH:D:\Qt\Qt486\lib Core.lib qtmain.lib QtCore4.lib kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib /MANIFEST /ManifestFile:"Release\TestQTI.exe.intermediate.manifest" /MANIFESTUAC:"level='asInvoker' uiAccess='false'" /PDB:"G:\Projects\SurfLTI\bin\Release\TestQTI.pdb" /SUBSYSTEM:CONSOLE /TLBID:1 /DYNAMICBASE /NXCOMPAT /IMPLIB:"..\bin\Release\TestQTI.lib" /MACHINE:X86 Release\gtrilti.obj
+         Release\main.obj
+         TestQTI.vcxproj -> G:\Projects\SurfLTI\TestQTI\..\bin\Release\TestQTI.exe
+       Manifest:
+         C:\Program Files (x86)\Microsoft SDKs\Windows\v7.0A\bin\mt.exe /nologo /verbose /outputresource:"..\bin\Release\\TestQTI.exe;#1" /manifest Release\TestQTI.exe.intermediate.manifest
+       FinalizeBuildStatus:
+         正在删除文件“Release\TestQTI.unsuccessfulbuild”。
+         正在对“Release\TestQTI.lastbuildstate”执行 Touch 任务。
+     1>已完成生成项目“G:\Projects\SurfLTI\TestQTI\TestQTI.vcxproj”(rebuild 个目标)的操作。
+
+生成成功。
+
+已用时间 00:00:01.91
